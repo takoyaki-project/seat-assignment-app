@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>席替えアプリ</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+
+  <header>
+    <span class="header-icon">🏫</span>
+    <h1>席替えアプリ</h1>
+    <p class="subtitle">条件を入力するだけで自動で席を決めます</p>
+    <button id="btn-demo">✨ まずはデモデータで試す</button>
+  </header>
+
+  <section class="card" id="section-step1">
+    <h2><span class="step-badge">1</span> 教室の設定</h2>
+    <div class="row-inputs">
+      <label>縦（行数）<input type="number" id="inp-rows" min="1" max="10" value="5" /></label>
+      <span class="cross">×</span>
+      <label>横（列数）<input type="number" id="inp-cols" min="1" max="10" value="6" /></label>
+      <span class="equals">＝</span>
+      <span class="capacity" id="txt-capacity">30席</span>
+    </div>
+    <div class="row-inputs" style="margin-top:16px;">
+      <label>生徒数<input type="number" id="inp-count" min="1" max="100" value="28" /></label>
+      <button id="btn-generate">次へ →</button>
+    </div>
+  </section>
+
+  <section class="card hidden" id="section-step2">
+    <h2><span class="step-badge">2</span> 性別を設定（タップで切替）</h2>
+    <p class="hint">青＝男子　赤＝女子</p>
+    <div class="save-load-bar">
+      <button id="btn-save-class">💾 このクラスを保存</button>
+      <button id="btn-load-class" class="hidden">📂 前回のクラスを読み込む</button>
+    </div>
+    <div id="student-grid"></div>
+  </section>
+
+  <section class="card hidden" id="section-step3">
+    <h2><span class="step-badge">3</span> 条件を設定（任意）</h2>
+
+    <div class="condition-block">
+      <h3>🚫 隣同士NG（左右）</h3>
+      <p class="hint">隣に座らせたくない生徒の番号を入力</p>
+      <div id="list-ng"></div>
+      <button id="btn-add-ng">＋ NG条件を追加</button>
+    </div>
+
+    <div class="condition-block">
+      <h3>📌 席を指定</h3>
+      <p class="hint">この生徒はこの席、と固定できます</p>
+      <div id="list-fixed"></div>
+      <button id="btn-add-fixed">＋ 指定席を追加</button>
+    </div>
+
+    <div class="condition-block">
+      <h3>⬆️ 前の席に配置</h3>
+      <p class="hint">前から何行目までに座らせるか指定</p>
+      <div id="list-front"></div>
+      <button id="btn-add-front">＋ 前列条件を追加</button>
+    </div>
+
+    <div class="condition-block">
+      <h3>👥 男女の配置ルール</h3>
+      <div class="gender-rule-options">
+        <label class="radio-label"><input type="radio" name="genderRule" value="mixed" checked /> 混合（制限なし）</label>
+        <label class="radio-label"><input type="radio" name="genderRule" value="columns" /> 列ごとに男女を分ける</label>
+      </div>
+      <div id="col-gender-settings" class="hidden">
+        <p class="hint">各列の性別を指定（未指定は混合）</p>
+        <div id="col-gender-grid"></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="center hidden" id="section-execute">
+    <button id="btn-run">🎲 席替えをする！</button>
+  </div>
+
+  <section class="card hidden" id="section-result">
+    <h2><span class="step-badge">4</span> 席替え結果</h2>
+    <div class="blackboard-wrap">
+      <div class="blackboard-label">黒　板</div>
+    </div>
+    <div id="classroom-grid"></div>
+    <div id="error-msg" class="error-msg hidden"></div>
+    <div class="result-actions">
+      <button id="btn-print">🖨️ 印刷する</button>
+      <button id="btn-share">📤 ほかの先生にシェアする</button>
+      <button id="btn-retry">🔄 もう一度やり直す</button>
+    </div>
+  </section>
+<footer class="app-footer">
+  <p>TAKOYAKI PROJECT</p>
+  <p>The development never ends.</p>
+</footer>
+</div>
+<script src="script.js"></script>
+
+    <script src="script.js"></script>
+</body>
+</html>
