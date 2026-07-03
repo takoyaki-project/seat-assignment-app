@@ -1,8 +1,9 @@
+
 # 席替えアプリ
 
 出席番号だけで使える、名前不要の条件付き席替えWebアプリ。
 
-<img width="1200" height="630" alt="席替え" src="https://github.com/user-attachments/assets/42c44c44-b89e-4b7f-ab40-c767f5d421f1" />
+<img width="1586" height="992" alt="ogp-sekigae" src="https://github.com/user-attachments/assets/6a477e07-b5ca-4b0b-b795-bdc592353e38" />
 
 ## 特徴
 
