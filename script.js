@@ -115,11 +115,15 @@ function onClickNextStep() {
     return;
   }
 
-  // デモデータ等で既にstudentsが入っていない場合のみ、新規で男子を生成
+  // 既に設定済みの性別は保ったまま、人数の増減分だけ調整する
+  // （以前は人数を変えると全員の性別が男子にリセットされていた）
   if (students.length !== count) {
-    students = [];
-    for (var i = 1; i <= count; i++) {
-      students.push({ id: i, gender: 'male' });
+    if (students.length > count) {
+      students = students.slice(0, count);
+    } else {
+      for (var i = students.length + 1; i <= count; i++) {
+        students.push({ id: i, gender: 'male' });
+      }
     }
   }
 
@@ -189,7 +193,21 @@ function onClickLoadClass() {
   var dataStr = localStorage.getItem('saved_classroom_students');
   if (!dataStr) return;
 
-  var config = JSON.parse(dataStr);
+  var config;
+  try {
+    config = JSON.parse(dataStr);
+    if (!config || !config.students || !config.students.length) {
+      throw new Error('invalid data');
+    }
+  } catch (e) {
+    // 保存データが壊れている場合は、伝えた上で片付ける（無言で無反応にならないように）
+    alert('保存されたクラス情報が読み込めませんでした。\nお手数ですが、もう一度設定して保存し直してください。');
+    localStorage.removeItem('saved_classroom_students');
+    var btnLoad = document.getElementById('btn-load-class');
+    if (btnLoad) btnLoad.classList.add('hidden');
+    return;
+  }
+
   document.getElementById('inp-rows').value = config.rows;
   document.getElementById('inp-cols').value = config.cols;
   document.getElementById('inp-count').value = config.count;
@@ -330,6 +348,71 @@ var currentSeatsResult = [];
 var currentRows = 0;
 var currentCols = 0;
 
+// 実行前の条件チェック（無理な条件を具体的に教える）
+function validateConditions(rows, cols, studentsList, cond) {
+  var msgs = [];
+  var ids = {};
+  studentsList.forEach(function(st) { ids[st.id] = st; });
+
+  // 隣同士NG
+  cond.ng.forEach(function(pair) {
+    if (!ids[pair[0]]) msgs.push('隣同士NG: ' + pair[0] + '番の生徒は存在しません。');
+    if (!ids[pair[1]]) msgs.push('隣同士NG: ' + pair[1] + '番の生徒は存在しません。');
+    if (pair[0] === pair[1]) msgs.push('隣同士NG: 同じ番号（' + pair[0] + '番）同士が指定されています。');
+  });
+
+  // 指定席
+  var usedSeats = {};
+  var usedIds = {};
+  cond.fixed.forEach(function(fx) {
+    if (!ids[fx.id]) msgs.push('指定席: ' + fx.id + '番の生徒は存在しません。');
+    if (fx.row > rows || fx.col > cols) {
+      msgs.push('指定席: ' + fx.id + '番の席（' + fx.row + '行' + fx.col + '列）が教室の範囲外です。');
+    }
+    var seatKey = fx.row + '-' + fx.col;
+    if (usedSeats[seatKey]) msgs.push('指定席: ' + fx.row + '行' + fx.col + '列に複数の生徒が指定されています。');
+    usedSeats[seatKey] = true;
+    if (usedIds[fx.id]) msgs.push('指定席: ' + fx.id + '番の生徒が複数の席に指定されています。');
+    usedIds[fx.id] = true;
+  });
+
+  // 前の席に配置
+  cond.front.forEach(function(f) {
+    if (!ids[f.id]) msgs.push('前の席に配置: ' + f.id + '番の生徒は存在しません。');
+  });
+
+  // 指定席と前列指定の矛盾
+  cond.fixed.forEach(function(fx) {
+    cond.front.forEach(function(f) {
+      if (fx.id === f.id && fx.row > f.maxRow) {
+        msgs.push(fx.id + '番: 指定席が' + fx.row + '行目なのに「前から' + f.maxRow + '行目まで」の条件があり、矛盾しています。');
+      }
+    });
+  });
+
+  // 列ごと男女ルールの席数チェック
+  if (cond.genderRule === 'columns') {
+    var maleOnlyCols = 0;
+    var femaleOnlyCols = 0;
+    for (var c = 1; c <= cols; c++) {
+      if (cond.colGenders[c] === 'male') maleOnlyCols++;
+      if (cond.colGenders[c] === 'female') femaleOnlyCols++;
+    }
+    var males = studentsList.filter(function(s) { return s.gender === 'male'; }).length;
+    var females = studentsList.length - males;
+    var maleSeats = (cols - femaleOnlyCols) * rows;   // 男子が座れる席（男子列＋混合列）
+    var femaleSeats = (cols - maleOnlyCols) * rows;   // 女子が座れる席（女子列＋混合列）
+    if (males > maleSeats) {
+      msgs.push('男子' + males + '人に対して、男子が座れる席が' + maleSeats + '席しかありません。列の男女設定を見直してください。');
+    }
+    if (females > femaleSeats) {
+      msgs.push('女子' + females + '人に対して、女子が座れる席が' + femaleSeats + '席しかありません。列の男女設定を見直してください。');
+    }
+  }
+
+  return msgs;
+}
+
 function onClickRunShuffle() {
   var inpRows = document.getElementById('inp-rows');
   var inpCols = document.getElementById('inp-cols');
@@ -337,6 +420,14 @@ function onClickRunShuffle() {
   currentCols = parseInt(inpCols.value) || 0;
 
   var conds = collectConditions();
+
+  // 成功しようがない条件は、試行する前に具体的に伝える
+  var problems = validateConditions(currentRows, currentCols, students, conds);
+  if (problems.length > 0) {
+    alert('⚠️ 条件を確認してください:\n\n' + problems.join('\n'));
+    return;
+  }
+
   var success = false;
   var finalSeats = [];
 
@@ -424,32 +515,68 @@ function assignSeats(rows, cols, studentsList, cond) {
     unplacedStudents[j] = tmp;
   }
 
-  // 席を前から順番に埋めてしていく
+  // 2.5 前列指定のある生徒を先に配置する
+  // （席の選択肢が狭い生徒を後回しにすると、席が埋まって入れなくなるため）
+  var frontLimit = {}; // 生徒番号 → 最も厳しい「前から何行目まで」
+  for (var fl = 0; fl < cond.front.length; fl++) {
+    var fc = cond.front[fl];
+    if (frontLimit[fc.id] === undefined || fc.maxRow < frontLimit[fc.id]) {
+      frontLimit[fc.id] = fc.maxRow;
+    }
+  }
+  var frontQueue = [];
+  for (var u = unplacedStudents.length - 1; u >= 0; u--) {
+    if (frontLimit[unplacedStudents[u].id] !== undefined) {
+      frontQueue.push(unplacedStudents[u]);
+      unplacedStudents.splice(u, 1);
+    }
+  }
+  for (var q = 0; q < frontQueue.length; q++) {
+    var fst = frontQueue[q];
+    var maxRowAllowed = frontLimit[fst.id];
+    // この生徒が座れる空席をすべて集める
+    var options = [];
+    for (var si = 0; si < totalSeatsCount; si++) {
+      if (seats[si] !== null) continue;
+      var sRow = Math.floor(si / cols) + 1;
+      var sCol = (si % cols) + 1;
+      if (sRow > maxRowAllowed) continue;
+      if (cond.genderRule === 'columns') {
+        var cRule = cond.colGenders[sCol];
+        if (cRule === 'male' && fst.gender !== 'male') continue;
+        if (cRule === 'female' && fst.gender !== 'female') continue;
+      }
+      options.push(si);
+    }
+    if (options.length === 0) return null; // 座れる席がない → この試行は失敗
+    var pick = options[Math.floor(Math.random() * options.length)];
+    seats[pick] = fst;
+  }
+
+  // 3. 残りの席を前から埋める
+  // （席ごとに「この席に座れる生徒」をシャッフル順で探す。
+  //   以前は並び順の先頭の生徒しか見ておらず、列ごとの男女ルールが
+  //   ほぼ確実に失敗する原因になっていた）
   for (var idx = 0; idx < totalSeatsCount; idx++) {
     if (seats[idx] !== null) continue;
     if (unplacedStudents.length === 0) break;
 
-    var currentRowNum = Math.floor(idx / cols) + 1;
     var currentColNum = (idx % cols) + 1;
-    var currentStudent = unplacedStudents[0];
-
-    if (cond.genderRule === 'columns') {
-      var rule = cond.colGenders[currentColNum];
-      if (rule === 'male' && currentStudent.gender !== 'male') continue;
-      if (rule === 'female' && currentStudent.gender !== 'female') continue;
-    }
-
-    var isFrontOk = true;
-    for (var f2 = 0; f2 < cond.front.length; f2++) {
-      if (cond.front[f2].id === currentStudent.id && currentRowNum > cond.front[f2].maxRow) {
-        isFrontOk = false;
-        break;
+    var foundIdx = -1;
+    for (var p = 0; p < unplacedStudents.length; p++) {
+      var cand = unplacedStudents[p];
+      if (cond.genderRule === 'columns') {
+        var rule = cond.colGenders[currentColNum];
+        if (rule === 'male' && cand.gender !== 'male') continue;
+        if (rule === 'female' && cand.gender !== 'female') continue;
       }
+      foundIdx = p;
+      break;
     }
-    if (!isFrontOk) continue;
+    if (foundIdx === -1) continue; // この席に座れる生徒がいない → 空席のまま
 
-    seats[idx] = currentStudent;
-    unplacedStudents.shift();
+    seats[idx] = unplacedStudents[foundIdx];
+    unplacedStudents.splice(foundIdx, 1);
   }
 
   if (unplacedStudents.length > 0) return null;
