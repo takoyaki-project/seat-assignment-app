@@ -15,6 +15,7 @@ function initApp() {
   var btnSaveClass = document.getElementById('btn-save-class');
   var btnLoadClass = document.getElementById('btn-load-class');
   var btnAddNg = document.getElementById('btn-add-ng');
+  var btnAddWant = document.getElementById('btn-add-want');
   var btnAddFixed = document.getElementById('btn-add-fixed');
   var btnAddFront = document.getElementById('btn-add-front');
   var btnRun = document.getElementById('btn-run');
@@ -52,6 +53,7 @@ function initApp() {
   if (btnLoadClass) btnLoadClass.addEventListener('click', onClickLoadClass);
   
   if (btnAddNg) btnAddNg.addEventListener('click', function() { addConditionInput('ng'); });
+  if (btnAddWant) btnAddWant.addEventListener('click', function() { addConditionInput('want'); });
   if (btnAddFixed) btnAddFixed.addEventListener('click', function() { addConditionInput('fixed'); });
   if (btnAddFront) btnAddFront.addEventListener('click', function() { addConditionInput('front'); });
   
@@ -231,6 +233,15 @@ function toggleGenderRowSettings() {
       block.classList.add('hidden');
     }
   }
+
+  var checkerHint = document.getElementById('checkerboard-hint');
+  if (checkerHint && checkedRadio) {
+    if (checkedRadio.value === 'checkerboard') {
+      checkerHint.classList.remove('hidden');
+    } else {
+      checkerHint.classList.add('hidden');
+    }
+  }
 }
 
 // 列ごとの男女選択肢の更新
@@ -280,6 +291,11 @@ function addConditionInput(type, defaultVals) {
     var v2 = defaultVals ? defaultVals[1] : '';
     html += '<input type="number" class="val-ng-1" placeholder="番号" value="' + v1 + '" /> と ';
     html += '<input type="number" class="val-ng-2" placeholder="番号" value="' + v2 + '" /> はNG';
+  } else if (type === 'want') {
+    var w1 = defaultVals ? defaultVals[0] : '';
+    var w2 = defaultVals ? defaultVals[1] : '';
+    html += '<input type="number" class="val-want-1" placeholder="番号" value="' + w1 + '" /> と ';
+    html += '<input type="number" class="val-want-2" placeholder="番号" value="' + w2 + '" /> を隣にする';
   } else if (type === 'fixed') {
     html += '<input type="number" class="val-fixed-id" placeholder="番号" /> 番の子を ';
     html += '前から <input type="number" class="val-fixed-r" placeholder="行" />行目・';
@@ -306,10 +322,13 @@ function collectConditions() {
   var checkedRadio = document.querySelector('input[name="genderRule"]:checked');
   var conds = {
     ng: [],
+    want: [],
     fixed: [],
     front: [],
     genderRule: checkedRadio ? checkedRadio.value : 'mixed',
-    colGenders: {}
+    colGenders: {},
+    // 格子状の開始性別（多い方）。validateConditionsとassignSeatsで同じ判定結果を使うため、ここで1回だけ求める
+    checkerStart: getCheckerStart(students)
   };
 
   var itemsNg = document.querySelectorAll('#list-ng .condition-item');
@@ -317,6 +336,13 @@ function collectConditions() {
     var id1 = parseInt(item.querySelector('.val-ng-1').value);
     var id2 = parseInt(item.querySelector('.val-ng-2').value);
     if (id1 && id2) conds.ng.push([id1, id2]);
+  });
+
+  var itemsWant = document.querySelectorAll('#list-want .condition-item');
+  itemsWant.forEach(function(item) {
+    var id1 = parseInt(item.querySelector('.val-want-1').value);
+    var id2 = parseInt(item.querySelector('.val-want-2').value);
+    if (id1 && id2) conds.want.push([id1, id2]);
   });
 
   var itemsFixed = document.querySelectorAll('#list-fixed .condition-item');
@@ -347,6 +373,48 @@ function collectConditions() {
 var currentSeatsResult = [];
 var currentRows = 0;
 var currentCols = 0;
+
+// 格子状（市松模様）のマス性別を返す（row/colは1始まり）
+// (row + col) が偶数 → 開始性別（多い方）、奇数 → 逆の性別
+function checkerGenderAt(row, col, startGender) {
+  var isStart = ((row + col) % 2 === 0);
+  var other = (startGender === 'male') ? 'female' : 'male';
+  return isStart ? startGender : other;
+}
+
+// 格子状の開始性別（多い方）を求める。同数なら男子始まり
+function getCheckerStart(studentsList) {
+  var maleCount = 0, femaleCount = 0;
+  studentsList.forEach(function(st) {
+    if (st.gender === 'male') { maleCount++; } else { femaleCount++; }
+  });
+  return (femaleCount > maleCount) ? 'female' : 'male';
+}
+
+// その席（row/colは1始まり）に座れる性別を返す。制限がなければnull
+// （列ごとルール／格子状の両方に対応。混合ルールでは常にnull）
+function seatGenderRequirement(cond, row, col) {
+  if (cond.genderRule === 'columns') {
+    var colRule = cond.colGenders[col];
+    if (colRule === 'male' || colRule === 'female') return colRule;
+    return null;
+  }
+  if (cond.genderRule === 'checkerboard') {
+    return checkerGenderAt(row, col, cond.checkerStart);
+  }
+  return null;
+}
+
+// 前からlimitRow行目までの格子状マスのうち、指定した性別のマス数を数える
+function countCheckerSeats(limitRow, cols, gender, checkerStart) {
+  var count = 0;
+  for (var r = 1; r <= limitRow; r++) {
+    for (var c = 1; c <= cols; c++) {
+      if (checkerGenderAt(r, c, checkerStart) === gender) count++;
+    }
+  }
+  return count;
+}
 
 // 実行前の条件チェック（無理な条件を具体的に教える）
 function validateConditions(rows, cols, studentsList, cond) {
@@ -426,6 +494,21 @@ function validateConditions(rows, cols, studentsList, cond) {
     });
   }
 
+  // 指定席の生徒の性別と、格子状（市松模様）のマス性別の矛盾
+  if (cond.genderRule === 'checkerboard') {
+    cond.fixed.forEach(function(fx) {
+      var st = ids[fx.id];
+      if (!st) return;
+      if (fx.row > rows || fx.col > cols) return; // 範囲外は別チェックで警告済み
+      var required = checkerGenderAt(fx.row, fx.col, cond.checkerStart);
+      if (st.gender !== required) {
+        var reqLabel = required === 'male' ? '男子' : '女子';
+        var stLabel = st.gender === 'male' ? '男子' : '女子';
+        msgs.push('指定席: ' + fx.id + '番（' + stLabel + '）が前から' + fx.row + '行目・左から' + fx.col + '列目に指定されていますが、格子状ではそのマスは' + reqLabel + 'の位置です。');
+      }
+    });
+  }
+
   // 隣同士NGの2人が、指定席どうしで隣になっている
   var fixedById = {};
   cond.fixed.forEach(function(fx) { fixedById[fx.id] = fx; });
@@ -480,6 +563,88 @@ function validateConditions(rows, cols, studentsList, cond) {
       if (needFemale > seatFemale) {
         msgs.push('前の席に配置: 前から' + limitRow + '行目までに女子が座れる席は' + seatFemale + '席ですが、そこに入る条件の女子が' + needFemale + '人います。');
       }
+    }
+    if (cond.genderRule === 'checkerboard') {
+      var seatMaleChecker = countCheckerSeats(limitRow, cols, 'male', cond.checkerStart);
+      var seatFemaleChecker = countCheckerSeats(limitRow, cols, 'female', cond.checkerStart);
+      if (needMale > seatMaleChecker) {
+        msgs.push('前の席に配置: 前から' + limitRow + '行目までに男子が座れる格子のマスは' + seatMaleChecker + 'マスですが、そこに入る条件の男子が' + needMale + '人います。');
+      }
+      if (needFemale > seatFemaleChecker) {
+        msgs.push('前の席に配置: 前から' + limitRow + '行目までに女子が座れる格子のマスは' + seatFemaleChecker + 'マスですが、そこに入る条件の女子が' + needFemale + '人います。');
+      }
+    }
+  });
+
+  // 隣にしたい: 存在確認・自己ペア確認（NGの既存チェックと同じ考え方）
+  cond.want.forEach(function(pair) {
+    if (!ids[pair[0]]) msgs.push('隣にしたい: ' + pair[0] + '番の生徒は存在しません。');
+    if (!ids[pair[1]]) msgs.push('隣にしたい: ' + pair[1] + '番の生徒は存在しません。');
+    if (pair[0] === pair[1]) msgs.push('隣にしたい: 同じ番号（' + pair[0] + '番）同士が指定されています。');
+  });
+
+  // 隣にしたい: 同じ生徒が複数の「隣にしたい」に登場（2人ペアのみの仕様に反する）
+  var wantAppearCount = {};
+  cond.want.forEach(function(pair) {
+    wantAppearCount[pair[0]] = (wantAppearCount[pair[0]] || 0) + 1;
+    wantAppearCount[pair[1]] = (wantAppearCount[pair[1]] || 0) + 1;
+  });
+  Object.keys(wantAppearCount).forEach(function(idKey) {
+    if (wantAppearCount[idKey] > 1) {
+      msgs.push('隣にしたい: ' + idKey + '番が複数の「隣にしたい」に指定されています。今は1人につき1組までにしてください。');
+    }
+  });
+
+  // 隣にしたい: 両方が指定席で、隣り合っていない
+  cond.want.forEach(function(pair) {
+    var f1 = fixedById[pair[0]];
+    var f2 = fixedById[pair[1]];
+    if (f1 && f2 && !(f1.row === f2.row && Math.abs(f1.col - f2.col) === 1)) {
+      msgs.push('隣にしたい: ' + pair[0] + '番と' + pair[1] + '番はどちらも指定席ですが、指定席どうしが隣になっていません（' + f1.row + '行' + f1.col + '列と' + f2.row + '行' + f2.col + '列）。');
+    }
+  });
+
+  // 隣にしたい: 一方が指定席で、その隣に相手を置ける場所がない
+  cond.want.forEach(function(pair) {
+    var f1 = fixedById[pair[0]];
+    var f2 = fixedById[pair[1]];
+    var fixedSide = null, otherId = null;
+    if (f1 && !f2) { fixedSide = f1; otherId = pair[1]; }
+    else if (f2 && !f1) { fixedSide = f2; otherId = pair[0]; }
+    else { return; } // 両方指定席・両方未指定は他のチェックに委ねる
+
+    var otherSt = ids[otherId];
+    if (!otherSt) return; // 存在チェックは別途
+    if (fixedSide.row > rows || fixedSide.col > cols) return; // 範囲外は別チェックで警告済み
+
+    var adjCols = [];
+    if (fixedSide.col > 1) adjCols.push(fixedSide.col - 1);
+    if (fixedSide.col < cols) adjCols.push(fixedSide.col + 1);
+
+    var hasSeat = adjCols.some(function(adjCol) {
+      // 隣のマスが別の生徒の指定席で埋まっているなら置けない
+      var occupied = cond.fixed.some(function(fx) {
+        return fx.row === fixedSide.row && fx.col === adjCol && fx.id !== otherId;
+      });
+      if (occupied) return false;
+      var required = seatGenderRequirement(cond, fixedSide.row, adjCol);
+      return !required || required === otherSt.gender;
+    });
+
+    if (!hasSeat) {
+      msgs.push('隣にしたい: ' + fixedSide.id + '番の指定席（左から' + fixedSide.col + '列目）の隣に、相手の' + otherId + '番を置ける場所がありません。');
+    }
+  });
+
+  // 隣にしたい: 男女ルールとの衝突（同性ペア × 格子状は隣が必ず男女になるため不可）
+  // ※ 列指定との細かい衝突判定は複雑になるため、まずは格子状との衝突だけを確実に警告する。
+  //   列指定側は「実行してみて無理なら既存の見つかりませんでしたに委ねる」で割り切る。
+  cond.want.forEach(function(pair) {
+    var s1 = ids[pair[0]];
+    var s2 = ids[pair[1]];
+    if (!s1 || !s2) return;
+    if (s1.gender === s2.gender && cond.genderRule === 'checkerboard') {
+      msgs.push('隣にしたい: ' + pair[0] + '番と' + pair[1] + '番は同性ですが、格子状では隣り合うマスが必ず男女になるため、隣にできません。');
     }
   });
 
@@ -571,6 +736,10 @@ function assignSeats(rows, cols, studentsList, cond) {
       if (colRule === 'male' && targetSt.gender !== 'male') return null;
       if (colRule === 'female' && targetSt.gender !== 'female') return null;
     }
+    if (cond.genderRule === 'checkerboard') {
+      var requiredGender = checkerGenderAt(fx.row, fx.col, cond.checkerStart);
+      if (targetSt.gender !== requiredGender) return null;
+    }
 
     for (var fr = 0; fr < cond.front.length; fr++) {
       if (cond.front[fr].id === targetSt.id && fx.row > cond.front[fr].maxRow) return null;
@@ -580,7 +749,107 @@ function assignSeats(rows, cols, studentsList, cond) {
     unplacedStudents.splice(targetStIdx, 1);
   }
 
-  // 2. 残りの生徒のランダムシャッフル
+  // 2. 隣にしたいペア（want）を配置する（fixedの直後）
+  // ランダム試行だけでは横並びが偶然にしか起きないため、ここで能動的に空き2マスへ置く
+  var findUnplacedById = function(id) {
+    for (var wsi = 0; wsi < unplacedStudents.length; wsi++) {
+      if (unplacedStudents[wsi].id === id) return wsi;
+    }
+    return -1;
+  };
+
+  for (var w = 0; w < cond.want.length; w++) {
+    var wp = cond.want[w];
+    var idA = wp[0], idB = wp[1];
+
+    var seatOfA = -1, seatOfB = -1;
+    for (var wi = 0; wi < totalSeatsCount; wi++) {
+      if (seats[wi] && seats[wi].id === idA) seatOfA = wi;
+      if (seats[wi] && seats[wi].id === idB) seatOfB = wi;
+    }
+
+    if (seatOfA !== -1 && seatOfB !== -1) {
+      // 両方すでに指定席で配置済み。隣接しているかはvalidateConditionsで事前に警告済みの前提
+      continue;
+    }
+
+    if (seatOfA === -1 && seatOfB === -1) {
+      // 両方まだ未配置 → 横に隣り合う空き2マスを探す
+      var idxA = findUnplacedById(idA);
+      var idxB = findUnplacedById(idB);
+      if (idxA === -1 || idxB === -1) return null; // 存在しない生徒（validateConditionsで弾かれているはず）
+      var stA = unplacedStudents[idxA];
+      var stB = unplacedStudents[idxB];
+
+      var pairOptions = [];
+      for (var pi = 0; pi < totalSeatsCount; pi++) {
+        var pCol = (pi % cols) + 1;
+        if (pCol === cols) continue; // 右マスが行末を越える
+        var leftIdx = pi;
+        var rightIdx2 = pi + 1;
+        if (seats[leftIdx] !== null || seats[rightIdx2] !== null) continue;
+
+        var pRow = Math.floor(leftIdx / cols) + 1;
+        var leftReq = seatGenderRequirement(cond, pRow, pCol);
+        var rightReq = seatGenderRequirement(cond, pRow, pCol + 1);
+
+        // 左=A・右=B
+        if ((!leftReq || leftReq === stA.gender) && (!rightReq || rightReq === stB.gender)) {
+          pairOptions.push({ left: leftIdx, right: rightIdx2, order: 'AB' });
+        }
+        // 左=B・右=A
+        if ((!leftReq || leftReq === stB.gender) && (!rightReq || rightReq === stA.gender)) {
+          pairOptions.push({ left: leftIdx, right: rightIdx2, order: 'BA' });
+        }
+      }
+      if (pairOptions.length === 0) return null;
+      var chosen = pairOptions[Math.floor(Math.random() * pairOptions.length)];
+      if (chosen.order === 'AB') {
+        seats[chosen.left] = stA;
+        seats[chosen.right] = stB;
+      } else {
+        seats[chosen.left] = stB;
+        seats[chosen.right] = stA;
+      }
+      // unplacedStudentsから削除（インデックスが大きい方から削除しないとズレる）
+      var removeHigh = Math.max(idxA, idxB);
+      var removeLow = Math.min(idxA, idxB);
+      unplacedStudents.splice(removeHigh, 1);
+      unplacedStudents.splice(removeLow, 1);
+    } else {
+      // 片方が指定席で既に置かれている → その左右の空きマスにもう片方を置く
+      var placedSeatIdx = (seatOfA !== -1) ? seatOfA : seatOfB;
+      var otherId = (seatOfA !== -1) ? idB : idA;
+      var otherIdx = findUnplacedById(otherId);
+      if (otherIdx === -1) return null;
+      var otherSt = unplacedStudents[otherIdx];
+
+      var placedRow = Math.floor(placedSeatIdx / cols) + 1;
+      var placedCol = (placedSeatIdx % cols) + 1;
+
+      var options2 = [];
+      if (placedCol > 1) {
+        var leftSeatIdx = placedSeatIdx - 1;
+        if (seats[leftSeatIdx] === null) {
+          var leftReq2 = seatGenderRequirement(cond, placedRow, placedCol - 1);
+          if (!leftReq2 || leftReq2 === otherSt.gender) options2.push(leftSeatIdx);
+        }
+      }
+      if (placedCol < cols) {
+        var rightSeatIdx = placedSeatIdx + 1;
+        if (seats[rightSeatIdx] === null) {
+          var rightReq2 = seatGenderRequirement(cond, placedRow, placedCol + 1);
+          if (!rightReq2 || rightReq2 === otherSt.gender) options2.push(rightSeatIdx);
+        }
+      }
+      if (options2.length === 0) return null;
+      var pick2 = options2[Math.floor(Math.random() * options2.length)];
+      seats[pick2] = otherSt;
+      unplacedStudents.splice(otherIdx, 1);
+    }
+  }
+
+  // 3. 残りの生徒のランダムシャッフル
   for (var k = unplacedStudents.length - 1; k > 0; k--) {
     var j = Math.floor(Math.random() * (k + 1));
     var tmp = unplacedStudents[k];
@@ -588,7 +857,7 @@ function assignSeats(rows, cols, studentsList, cond) {
     unplacedStudents[j] = tmp;
   }
 
-  // 2.5 前列指定のある生徒を先に配置する
+  // 3.5 前列指定のある生徒を先に配置する
   // （席の選択肢が狭い生徒を後回しにすると、席が埋まって入れなくなるため）
   var frontLimit = {}; // 生徒番号 → 最も厳しい「前から何行目まで」
   for (var fl = 0; fl < cond.front.length; fl++) {
@@ -619,6 +888,10 @@ function assignSeats(rows, cols, studentsList, cond) {
         if (cRule === 'male' && fst.gender !== 'male') continue;
         if (cRule === 'female' && fst.gender !== 'female') continue;
       }
+      if (cond.genderRule === 'checkerboard') {
+        var reqGenderFront = checkerGenderAt(sRow, sCol, cond.checkerStart);
+        if (fst.gender !== reqGenderFront) continue;
+      }
       options.push(si);
     }
     if (options.length === 0) return null; // 座れる席がない → この試行は失敗
@@ -626,7 +899,7 @@ function assignSeats(rows, cols, studentsList, cond) {
     seats[pick] = fst;
   }
 
-  // 3. 残りの席を前から埋める
+  // 4. 残りの席を前から埋める
   // （席ごとに「この席に座れる生徒」をシャッフル順で探す。
   //   以前は並び順の先頭の生徒しか見ておらず、列ごとの男女ルールが
   //   ほぼ確実に失敗する原因になっていた）
@@ -634,17 +907,29 @@ function assignSeats(rows, cols, studentsList, cond) {
     if (seats[idx] !== null) continue;
     if (unplacedStudents.length === 0) break;
 
+    var currentRowNum = Math.floor(idx / cols) + 1;
     var currentColNum = (idx % cols) + 1;
     var foundIdx = -1;
-    for (var p = 0; p < unplacedStudents.length; p++) {
-      var cand = unplacedStudents[p];
-      if (cond.genderRule === 'columns') {
-        var rule = cond.colGenders[currentColNum];
-        if (rule === 'male' && cand.gender !== 'male') continue;
-        if (rule === 'female' && cand.gender !== 'female') continue;
+
+    if (cond.genderRule === 'checkerboard') {
+      // 前は市松・余る後方は自由: 求める性別（少ない方）を探し、
+      // もう残っていなければ市松をあきらめて残っている任意の生徒（多い方の余り）で埋める
+      var neededGender = checkerGenderAt(currentRowNum, currentColNum, cond.checkerStart);
+      for (var pc = 0; pc < unplacedStudents.length; pc++) {
+        if (unplacedStudents[pc].gender === neededGender) { foundIdx = pc; break; }
       }
-      foundIdx = p;
-      break;
+      if (foundIdx === -1) foundIdx = 0;
+    } else {
+      for (var p = 0; p < unplacedStudents.length; p++) {
+        var cand = unplacedStudents[p];
+        if (cond.genderRule === 'columns') {
+          var rule = cond.colGenders[currentColNum];
+          if (rule === 'male' && cand.gender !== 'male') continue;
+          if (rule === 'female' && cand.gender !== 'female') continue;
+        }
+        foundIdx = p;
+        break;
+      }
     }
     if (foundIdx === -1) continue; // この席に座れる生徒がいない → 空席のまま
 
@@ -654,7 +939,7 @@ function assignSeats(rows, cols, studentsList, cond) {
 
   if (unplacedStudents.length > 0) return null;
 
-  // 3. 隣NGルール検証
+  // 5. 隣NGルール検証
   if (!checkNgPairs(seats, cols, cond.ng)) return null;
 
   return seats;

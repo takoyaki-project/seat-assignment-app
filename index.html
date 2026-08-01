@@ -59,6 +59,13 @@
     </div>
 
     <div class="condition-block">
+      <h3>🤝 隣にしたい（左右）</h3>
+      <p class="hint">隣に座らせたい2人の番号を入力（席が左右に並びます）</p>
+      <div id="list-want"></div>
+      <button id="btn-add-want">＋ 隣にしたい条件を追加</button>
+    </div>
+
+    <div class="condition-block">
       <h3>📌 席を指定</h3>
       <p class="hint">この生徒はこの席、と固定できます<br>（行は前から、列は<strong>黒板に向かって左から</strong>数えます）</p>
       <div id="list-fixed"></div>
@@ -77,11 +84,13 @@
       <div class="gender-rule-options">
         <label class="radio-label"><input type="radio" name="genderRule" value="mixed" checked /> 混合（制限なし）</label>
         <label class="radio-label"><input type="radio" name="genderRule" value="columns" /> 列ごとに男女を分ける</label>
+        <label class="radio-label"><input type="radio" name="genderRule" value="checkerboard" /> 格子状（市松模様）に並べる</label>
       </div>
       <div id="col-gender-settings" class="hidden">
         <p class="hint">各列の性別を指定（1列目＝<strong>黒板に向かって一番左</strong>の列。未指定は混合）</p>
         <div id="col-gender-grid"></div>
       </div>
+      <p id="checkerboard-hint" class="hint hidden">多い方の性別が左上から始まる市松に並びます。人数差の分は後ろが空きます。</p>
     </div>
   </section>
 
