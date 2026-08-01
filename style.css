@@ -127,11 +127,25 @@ header h1 {
 .hint {
   color: var(--muted);
   font-size: 0.8rem;
+  margin-top: 4px;
   margin-bottom: 12px;
-  padding: 8px 12px;
-  background: var(--green-light);
-  border-radius: 8px;
-  border-left: 3px solid var(--green);
+  padding: 0;
+  background: none;
+  border-left: none;
+  border-radius: 0;
+  line-height: 1.6;
+}
+
+.hint-info {
+  color: var(--blue);
+  background: #f1f5ff;
+  border-left: 3px solid var(--blue);
+  border-radius: 0;
+  padding: 10px 14px;
+  margin-top: 12px;
+  margin-bottom: 12px;
+  font-size: 0.8rem;
+  line-height: 1.6;
 }
 
 /* ===== 入力行 ===== */
