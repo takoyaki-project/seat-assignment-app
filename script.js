@@ -648,6 +648,11 @@ function validateConditions(rows, cols, studentsList, cond) {
     }
   });
 
+  // 隣にしたい×前列指定: 「両者のmaxRow以下の行に横並びで入れる空きがあるか」の厳密判定は複雑なため、
+  // ここでは追加しない。同性×格子状や前列×性別席数の既存チェックでカバーされない稀な矛盾
+  // （例: 該当行の候補マスがすべて指定席で埋まっている等）は、assignSeats側でfront制約を
+  // 満たす候補だけに絞ったうえで、実行時の「条件を満たす席が見つかりませんでした」に委ねる。
+
   return msgs;
 }
 
@@ -749,6 +754,16 @@ function assignSeats(rows, cols, studentsList, cond) {
     unplacedStudents.splice(targetStIdx, 1);
   }
 
+  // 生徒ID → 最も厳しい「前から何行目まで」（front指定がなければ undefined）
+  // want配置（front制約を満たす候補に絞る）と、後の前列配置の両方でこの辞書を使い回す
+  var frontLimitById = {};
+  for (var fli = 0; fli < cond.front.length; fli++) {
+    var fEntry = cond.front[fli];
+    if (frontLimitById[fEntry.id] === undefined || fEntry.maxRow < frontLimitById[fEntry.id]) {
+      frontLimitById[fEntry.id] = fEntry.maxRow;
+    }
+  }
+
   // 2. 隣にしたいペア（want）を配置する（fixedの直後）
   // ランダム試行だけでは横並びが偶然にしか起きないため、ここで能動的に空き2マスへ置く
   var findUnplacedById = function(id) {
@@ -781,6 +796,10 @@ function assignSeats(rows, cols, studentsList, cond) {
       var stA = unplacedStudents[idxA];
       var stB = unplacedStudents[idxB];
 
+      // want ペアは必ず同じ行になるので、front制約は「その行が両者のmaxRow以下か」で判定できる
+      var limA = frontLimitById[stA.id]; // undefined なら制約なし
+      var limB = frontLimitById[stB.id];
+
       var pairOptions = [];
       for (var pi = 0; pi < totalSeatsCount; pi++) {
         var pCol = (pi % cols) + 1;
@@ -792,13 +811,14 @@ function assignSeats(rows, cols, studentsList, cond) {
         var pRow = Math.floor(leftIdx / cols) + 1;
         var leftReq = seatGenderRequirement(cond, pRow, pCol);
         var rightReq = seatGenderRequirement(cond, pRow, pCol + 1);
+        var frontOk = (limA === undefined || pRow <= limA) && (limB === undefined || pRow <= limB);
 
         // 左=A・右=B
-        if ((!leftReq || leftReq === stA.gender) && (!rightReq || rightReq === stB.gender)) {
+        if ((!leftReq || leftReq === stA.gender) && (!rightReq || rightReq === stB.gender) && frontOk) {
           pairOptions.push({ left: leftIdx, right: rightIdx2, order: 'AB' });
         }
         // 左=B・右=A
-        if ((!leftReq || leftReq === stB.gender) && (!rightReq || rightReq === stA.gender)) {
+        if ((!leftReq || leftReq === stB.gender) && (!rightReq || rightReq === stA.gender) && frontOk) {
           pairOptions.push({ left: leftIdx, right: rightIdx2, order: 'BA' });
         }
       }
@@ -826,6 +846,11 @@ function assignSeats(rows, cols, studentsList, cond) {
 
       var placedRow = Math.floor(placedSeatIdx / cols) + 1;
       var placedCol = (placedSeatIdx % cols) + 1;
+
+      // 置こうとしている側にfront制約があるなら、指定席の行がその制約を満たすか確認する
+      // （満たさない場合は矛盾なので、後段の事前チェックか既存の失敗メッセージに委ねる）
+      var otherLim = frontLimitById[otherSt.id];
+      if (otherLim !== undefined && placedRow > otherLim) return null;
 
       var options2 = [];
       if (placedCol > 1) {
@@ -859,23 +884,18 @@ function assignSeats(rows, cols, studentsList, cond) {
 
   // 3.5 前列指定のある生徒を先に配置する
   // （席の選択肢が狭い生徒を後回しにすると、席が埋まって入れなくなるため）
-  var frontLimit = {}; // 生徒番号 → 最も厳しい「前から何行目まで」
-  for (var fl = 0; fl < cond.front.length; fl++) {
-    var fc = cond.front[fl];
-    if (frontLimit[fc.id] === undefined || fc.maxRow < frontLimit[fc.id]) {
-      frontLimit[fc.id] = fc.maxRow;
-    }
-  }
+  // frontLimitByIdはwant配置より前で計算済み（②で置かれた生徒はunplacedStudentsから
+  // 既に除外されているため、ここでは自然にfrontQueueへ回ってこない＝二重配置しない）
   var frontQueue = [];
   for (var u = unplacedStudents.length - 1; u >= 0; u--) {
-    if (frontLimit[unplacedStudents[u].id] !== undefined) {
+    if (frontLimitById[unplacedStudents[u].id] !== undefined) {
       frontQueue.push(unplacedStudents[u]);
       unplacedStudents.splice(u, 1);
     }
   }
   for (var q = 0; q < frontQueue.length; q++) {
     var fst = frontQueue[q];
-    var maxRowAllowed = frontLimit[fst.id];
+    var maxRowAllowed = frontLimitById[fst.id];
     // この生徒が座れる空席をすべて集める
     var options = [];
     for (var si = 0; si < totalSeatsCount; si++) {

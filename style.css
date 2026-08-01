@@ -214,7 +214,7 @@ select {
 }
 #btn-generate:active, .btn-generate:active { transform: scale(0.97); }
 
-#btn-add-ng, #btn-add-fixed, #btn-add-front, .btn-add {
+#btn-add-ng, #btn-add-want, #btn-add-fixed, #btn-add-front, .btn-add {
   background: var(--green-light);
   color: var(--green-dark);
   border: 2px dashed var(--green);
@@ -228,7 +228,7 @@ select {
   transition: background 0.2s, transform 0.1s;
   letter-spacing: 0.03em;
 }
-#btn-add-ng:hover, #btn-add-fixed:hover, #btn-add-front:hover, .btn-add:hover { background: #d4eadb; transform: translateY(-1px); }
+#btn-add-ng:hover, #btn-add-want:hover, #btn-add-fixed:hover, #btn-add-front:hover, .btn-add:hover { background: #d4eadb; transform: translateY(-1px); }
 
 #btn-run, .btn-run {
   background: linear-gradient(135deg, var(--green) 0%, var(--green-dark) 100%);
@@ -264,12 +264,12 @@ select {
   color: var(--green-dark);
   border: 2px solid var(--green);
   border-radius: var(--radius-sm);
-  padding: 11px 28px;
+  padding: 11px 24px;
   font-size: 0.95rem;
   font-family: inherit;
   font-weight: 700;
   cursor: pointer;
-  margin-top: 20px;
+  margin-top: 0;
   transition: background 0.2s, transform 0.1s;
   letter-spacing: 0.04em;
 }
@@ -594,8 +594,8 @@ select {
 }
 #btn-load-class:hover { background: #c8e6d0; transform: translateY(-1px); }
 
-/* ===== 印刷ボタン ===== */
-#btn-print {
+/* ===== 印刷・シェアボタン（結果を外に出す操作＝青系で統一） ===== */
+#btn-print, #btn-share {
   background: #f1f5ff;
   color: var(--blue);
   border: 2px solid var(--blue);
@@ -607,8 +607,9 @@ select {
   cursor: pointer;
   margin-top: 0;
   transition: background 0.2s, transform 0.1s;
+  letter-spacing: 0.04em;
 }
-#btn-print:hover { background: var(--blue-light); transform: translateY(-1px); }
+#btn-print:hover, #btn-share:hover { background: var(--blue-light); transform: translateY(-1px); }
 
 /* ===== 印刷用スタイル ===== */
 @media print {
