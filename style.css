@@ -643,17 +643,15 @@ select {
 
 .app-footer p {
   margin: 6px 0;
-}
-
-.app-footer p:first-child {
   font-size: 14px;
   color: #666;
+}
+
+.app-footer p:nth-child(1) {
   letter-spacing: 1px;
 }
 
-.app-footer p:last-child {
-  font-size: 14px;
-  color: #666;
+.app-footer p:nth-child(2) {
   font-weight: 500;
 }
 
