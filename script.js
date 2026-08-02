@@ -309,7 +309,7 @@ function addConditionInput(type, defaultVals) {
     var nw1 = defaultVals ? defaultVals[0] : '';
     var nw2 = defaultVals ? defaultVals[1] : '';
     html += '<input type="number" class="val-near-want-1" placeholder="番号" value="' + nw1 + '" /> と ';
-    html += '<input type="number" class="val-near-want-2" placeholder="番号" value="' + nw2 + '" /> を近く（2マス以内）にする';
+    html += '<input type="number" class="val-near-want-2" placeholder="番号" value="' + nw2 + '" /> を近く（すぐ隣）にする';
   } else if (type === 'fixed') {
     html += '<input type="number" class="val-fixed-id" placeholder="番号" /> 番の子を ';
     html += '前から <input type="number" class="val-fixed-r" placeholder="行" />行目・';
@@ -740,19 +740,19 @@ function validateConditions(rows, cols, studentsList, cond) {
     }
   });
 
-  // 近くにしたい: 両方が指定席で、距離2を超えている
+  // 近くにしたい: 両方が指定席で、距離1（すぐ隣）を超えている
   cond.nearWant.forEach(function(pair) {
     var f1 = fixedById[pair[0]];
     var f2 = fixedById[pair[1]];
     if (f1 && f2) {
       var nearFixedDist = Math.max(Math.abs(f1.row - f2.row), Math.abs(f1.col - f2.col));
-      if (nearFixedDist > 2) {
-        msgs.push('近くにしたい: ' + pair[0] + '番と' + pair[1] + '番はどちらも指定席ですが、離れすぎています（距離2以内にしてください）。');
+      if (nearFixedDist > 1) {
+        msgs.push('近くにしたい: ' + pair[0] + '番と' + pair[1] + '番はどちらも指定席ですが、離れすぎています（すぐ隣どうしにしてください）。');
       }
     }
   });
 
-  // 近くにしたい: 一方が指定席で、その距離2以内に相手を置ける席が無い
+  // 近くにしたい: 一方が指定席で、そのすぐ隣（距離1）に相手を置ける席が無い
   cond.nearWant.forEach(function(pair) {
     var f1 = fixedById[pair[0]];
     var f2 = fixedById[pair[1]];
@@ -770,7 +770,7 @@ function validateConditions(rows, cols, studentsList, cond) {
       for (var nc1 = 1; nc1 <= cols; nc1++) {
         if (nr1 === fixedSide.row && nc1 === fixedSide.col) continue;
         var nearDist = Math.max(Math.abs(nr1 - fixedSide.row), Math.abs(nc1 - fixedSide.col));
-        if (nearDist > 2) continue;
+        if (nearDist > 1) continue;
         // 別の生徒の指定席で埋まっているなら置けない
         var occupiedNear = cond.fixed.some(function(fx) {
           return fx.row === nr1 && fx.col === nc1 && fx.id !== otherId;
@@ -783,13 +783,15 @@ function validateConditions(rows, cols, studentsList, cond) {
       }
     }
     if (!hasNearSeat) {
-      msgs.push('近くにしたい: ' + fixedSide.id + '番の指定席の近く（2マス以内）に、相手の' + otherId + '番を置ける席がありません。');
+      msgs.push('近くにしたい: ' + fixedSide.id + '番の指定席のすぐ隣（前後左右ななめ）に、相手の' + otherId + '番を置ける席がありません。');
     }
   });
 
   // 近くにしたい: 男女ルールとの衝突について
-  // → 距離2以内なら男女どちらの席も選べる組み合わせが必ず残るため、
-  //   「隣にしたい」×格子状のような確実な衝突は起きない。よって追加チェックは不要。
+  // → 格子状（市松）では、同じ性別のマスは必ずななめに隣接するため、
+  //   距離1（前後左右ななめ）の範囲でも同性ペアの候補は必ず残る。
+  //   （左右・前後は異性マスになるが、ななめは必ず同性マスになるため）
+  //   よって「隣にしたい」×格子状のような確実な衝突は起きない。追加チェックは不要。
 
   // 同じペアが矛盾する条件に同時に登場していないか
   cond.farNg.forEach(function(fp) {
@@ -1047,12 +1049,12 @@ function assignSeats(rows, cols, studentsList, cond) {
       var rA2 = Math.floor(seatOfA2 / cols) + 1, cA2 = (seatOfA2 % cols) + 1;
       var rB2 = Math.floor(seatOfB2 / cols) + 1, cB2 = (seatOfB2 % cols) + 1;
       var dAB2 = Math.max(Math.abs(rA2 - rB2), Math.abs(cA2 - cB2));
-      if (dAB2 > 2) return null; // この試行は失敗。呼び出し元が再試行する
+      if (dAB2 > 1) return null; // この試行は失敗。呼び出し元が再試行する
       continue;
     }
 
     if (seatOfA2 === -1 && seatOfB2 === -1) {
-      // 両方まだ未配置 → チェビシェフ距離2以内の空き2マスの組を探す
+      // 両方まだ未配置 → チェビシェフ距離1以内（すぐ隣の8マス）の空き2マスの組を探す
       var idxA2 = findUnplacedById(idA2);
       var idxB2 = findUnplacedById(idB2);
       if (idxA2 === -1 || idxB2 === -1) return null; // 存在しない生徒（validateConditionsで弾かれているはず）
@@ -1071,8 +1073,8 @@ function assignSeats(rows, cols, studentsList, cond) {
         var req1 = seatGenderRequirement(cond, row1, col1);
         if (req1 && req1 !== stA2.gender) continue;
 
-        for (var dr = -2; dr <= 2; dr++) {
-          for (var dc = -2; dc <= 2; dc++) {
+        for (var dr = -1; dr <= 1; dr++) {
+          for (var dc = -1; dc <= 1; dc++) {
             if (dr === 0 && dc === 0) continue;
             var row2 = row1 + dr;
             var col2 = col1 + dc;
@@ -1095,7 +1097,7 @@ function assignSeats(rows, cols, studentsList, cond) {
       unplacedStudents.splice(removeHigh2, 1);
       unplacedStudents.splice(removeLow2, 1);
     } else {
-      // 片方が指定席で既に置かれている → その2マス以内の空きマスにもう片方を置く
+      // 片方が指定席で既に置かれている → そのすぐ隣（距離1）の空きマスにもう片方を置く
       var placedSeatIdx2 = (seatOfA2 !== -1) ? seatOfA2 : seatOfB2;
       var otherId2 = (seatOfA2 !== -1) ? idB2 : idA2;
       var otherIdx2 = findUnplacedById(otherId2);
@@ -1107,8 +1109,8 @@ function assignSeats(rows, cols, studentsList, cond) {
       var otherLim2 = frontLimitById[otherSt2.id];
 
       var nearOptions2 = [];
-      for (var dr2 = -2; dr2 <= 2; dr2++) {
-        for (var dc2 = -2; dc2 <= 2; dc2++) {
+      for (var dr2 = -1; dr2 <= 1; dr2++) {
+        for (var dc2 = -1; dc2 <= 1; dc2++) {
           if (dr2 === 0 && dc2 === 0) continue;
           var r2 = placedRow2 + dr2;
           var c2 = placedCol2 + dc2;
@@ -1263,7 +1265,7 @@ function checkFarNgPairs(seatsArray, cols, farNgList) {
   return true;
 }
 
-// 近くにしたいペアが、距離2以内に収まっているか検査する
+// 近くにしたいペアが、距離1（すぐ隣の8マス）に収まっているか検査する
 // （配置ロジックで置いたつもりでも、他条件で先に座席が決まっていた場合の取りこぼしをここで確実に拾う）
 function checkNearWantPairs(seatsArray, cols, nearWantList) {
   if (nearWantList.length === 0) return true;
@@ -1279,7 +1281,7 @@ function checkNearWantPairs(seatsArray, cols, nearWantList) {
     var p2 = posById[pair[1]];
     if (!p1 || !p2) continue;
     var dist = Math.max(Math.abs(p1.row - p2.row), Math.abs(p1.col - p2.col));
-    if (dist > 2) return false;
+    if (dist > 1) return false;
   }
   return true;
 }
