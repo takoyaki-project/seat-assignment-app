@@ -73,6 +73,27 @@ header h1 {
   letter-spacing: 0.04em;
 }
 
+.feature-chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  list-style: none;
+  padding: 0;
+  margin: 14px 0 18px;
+}
+
+.feature-chips li {
+  background: var(--green-light);
+  color: var(--green-dark);
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 5px 12px;
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
 /* ===== カード ===== */
 .card {
   background: var(--paper);
