@@ -1040,7 +1040,14 @@ function assignSeats(rows, cols, studentsList, cond) {
     }
 
     if (seatOfA2 !== -1 && seatOfB2 !== -1) {
-      // 両方すでに指定席で配置済み。距離2以内かはvalidateConditionsで事前に警告済みの前提
+      // 両方すでに配置済み。指定席由来とは限らず、直前のwantや別のnearWantで
+      // 先に座席が決まっている場合もあるため、ここで必ず距離を検査する
+      // （「指定席同士だから事前チェック済み」という思い込みが、条件が黙って
+      // 無視される不具合の原因だった）。
+      var rA2 = Math.floor(seatOfA2 / cols) + 1, cA2 = (seatOfA2 % cols) + 1;
+      var rB2 = Math.floor(seatOfB2 / cols) + 1, cB2 = (seatOfB2 % cols) + 1;
+      var dAB2 = Math.max(Math.abs(rA2 - rB2), Math.abs(cA2 - cB2));
+      if (dAB2 > 2) return null; // この試行は失敗。呼び出し元が再試行する
       continue;
     }
 
@@ -1206,9 +1213,10 @@ function assignSeats(rows, cols, studentsList, cond) {
 
   if (unplacedStudents.length > 0) return null;
 
-  // 5. 隣NGルール検証 ＋ 近くNG（farNg）判定
+  // 5. 隣NGルール検証 ＋ 近くNG（farNg）判定 ＋ 近くにしたい（nearWant）の事後検証
   if (!checkNgPairs(seats, cols, cond.ng)) return null;
   if (!checkFarNgPairs(seats, cols, cond.farNg)) return null;
+  if (!checkNearWantPairs(seats, cols, cond.nearWant)) return null;
 
   return seats;
 }
@@ -1251,6 +1259,47 @@ function checkFarNgPairs(seatsArray, cols, farNgList) {
     if (!p1 || !p2) continue;
     var dist = Math.max(Math.abs(p1.row - p2.row), Math.abs(p1.col - p2.col));
     if (dist < 3) return false;
+  }
+  return true;
+}
+
+// 近くにしたいペアが、距離2以内に収まっているか検査する
+// （配置ロジックで置いたつもりでも、他条件で先に座席が決まっていた場合の取りこぼしをここで確実に拾う）
+function checkNearWantPairs(seatsArray, cols, nearWantList) {
+  if (nearWantList.length === 0) return true;
+  var posById = {};
+  for (var idx = 0; idx < seatsArray.length; idx++) {
+    var st = seatsArray[idx];
+    if (!st) continue;
+    posById[st.id] = { row: Math.floor(idx / cols) + 1, col: (idx % cols) + 1 };
+  }
+  for (var n = 0; n < nearWantList.length; n++) {
+    var pair = nearWantList[n];
+    var p1 = posById[pair[0]];
+    var p2 = posById[pair[1]];
+    if (!p1 || !p2) continue;
+    var dist = Math.max(Math.abs(p1.row - p2.row), Math.abs(p1.col - p2.col));
+    if (dist > 2) return false;
+  }
+  return true;
+}
+
+// 隣にしたいペアが、左右に隣接しているか検査する（手動入れ替え後の検証で使う）
+function checkWantPairs(seatsArray, cols, wantList) {
+  if (wantList.length === 0) return true;
+  var posById = {};
+  for (var idx = 0; idx < seatsArray.length; idx++) {
+    var st = seatsArray[idx];
+    if (!st) continue;
+    posById[st.id] = { row: Math.floor(idx / cols) + 1, col: (idx % cols) + 1 };
+  }
+  for (var n = 0; n < wantList.length; n++) {
+    var pair = wantList[n];
+    var p1 = posById[pair[0]];
+    var p2 = posById[pair[1]];
+    if (!p1 || !p2) continue;
+    var adjacent = (p1.row === p2.row) && (Math.abs(p1.col - p2.col) === 1);
+    if (!adjacent) return false;
   }
   return true;
 }
@@ -1363,6 +1412,15 @@ function onSeatClick(clickedIdx) {
   // 入れ替え検証
   if (!checkNgPairs(tempSeats, currentCols, conds.ng)) {
     alerts.push('「隣同士NG」の指定に違反するペアができてしまいます。');
+  }
+  if (!checkFarNgPairs(tempSeats, currentCols, conds.farNg)) {
+    alerts.push('「近くにしたくない」の指定に違反するペアができてしまいます。');
+  }
+  if (!checkNearWantPairs(tempSeats, currentCols, conds.nearWant)) {
+    alerts.push('「近くにしたい」の指定から離れてしまうペアができます。');
+  }
+  if (!checkWantPairs(tempSeats, currentCols, conds.want)) {
+    alerts.push('「隣にしたい」の指定から離れてしまうペアができます。');
   }
 
   for (var i = 0; i < tempSeats.length; i++) {
