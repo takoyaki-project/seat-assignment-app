@@ -228,7 +228,7 @@ select {
 }
 #btn-generate:active, .btn-generate:active { transform: scale(0.97); }
 
-#btn-add-ng, #btn-add-want, #btn-add-fixed, #btn-add-front, .btn-add {
+#btn-add-ng, #btn-add-want, #btn-add-far-ng, #btn-add-near-want, #btn-add-fixed, #btn-add-front, .btn-add {
   background: var(--green-light);
   color: var(--green-dark);
   border: 2px dashed var(--green);
@@ -242,7 +242,7 @@ select {
   transition: background 0.2s, transform 0.1s;
   letter-spacing: 0.03em;
 }
-#btn-add-ng:hover, #btn-add-want:hover, #btn-add-fixed:hover, #btn-add-front:hover, .btn-add:hover { background: #d4eadb; transform: translateY(-1px); }
+#btn-add-ng:hover, #btn-add-want:hover, #btn-add-far-ng:hover, #btn-add-near-want:hover, #btn-add-fixed:hover, #btn-add-front:hover, .btn-add:hover { background: #d4eadb; transform: translateY(-1px); }
 
 #btn-run, .btn-run {
   background: linear-gradient(135deg, var(--green) 0%, var(--green-dark) 100%);
